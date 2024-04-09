@@ -1,19 +1,16 @@
-#include <cmath>
+#include <math.h>
 #include <Servo.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
-#include <Wire.h> //maybe not needed if compass doesn't work
-#include <HMC5883L_Simple.h> //maybe not needed if compass doesn't work
 
 using namespace std;
 
 static const int windSensorPin = A5;
-static const int TXPin = 4, RXPin = 3;
+static const int TXPin = 4, RXPin = 5;
 static const uint32_t GPSBaud = 9600;
 
 Servo rudder;
 Servo mainsheet;
-HMC5883L_Simple Compass; //maybe not needed if compass doesn't work
 TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
@@ -21,11 +18,15 @@ SoftwareSerial ss(RXPin, TXPin);
 int windDirection;
 int windSensorOutput;
 
+int mainsheetTrim;
+int rudderPosition;
+float destHeading;
+int targHeading;
+
 void setup() {
   Serial.begin(115200);
-  Wire.begin(); //maybe not needed if compass doesn't work
   ss.begin(GPSBaud);
-
+  compass.init();
   rudder.attach(9);
   rudder.write(90);
 
@@ -33,23 +34,28 @@ void setup() {
 }
 
 void loop() {
+  while (ss.available() > 0) { // collect gps data first
+    gps.encode(ss.read());
+  }
+
   windSensorOutput = analogRead(windSensorPin);
-  windDirection = map(windSensorOutput, 0,1006, 0, 359);
-  
-}
+  windDirection = map(windSensorOutput, 0,1006, 0, 359); // read wind direction next
 
-float calulateHeadingToDestination(float latitude, float longitude, float destLatitude, float destLongitude) {
-  latitude *= M_PI/180; //convert to radians
-  destLatitude *= M_PI/180; //convert to radians
-  float deltaLongitude = abs(destLongitude-longitude);
-  deltaLongitude *= M_PI/180; //convert to radians
+  mainsheetTrim = calculateSailAngle(windDirection); // calculate trim angle for sail
 
-  float X = cos(targetLat) * sin(deltaLongitude);
-  float Y = cos(latitude) * sin(targetLat) - sin(latitude) * cos(targetLat) * cos(deltaLongitude);
+  // destHeading = TinyGPS++::courseTo(gps.location.lat(), gps.location.lng(), targetLat, targetLon);
 
-  float headingToDestination = atan2(X,Y);
-  headingToDestination *= 180/M_PI; //convert back to degrees
-  return headingToDestination;
+  // targHeading = calculateTargetHeading(windDirection, destHeading);
+
+  // rudderPosition = calculateRudderAngle(targHeading, gps.course.deg());
+
+  // rudder.write(rudderPosition);
+  mainsheet.write(mainsheetTrim);
+
+  delay(500);   
+  }
+    
+      
 }
 
 int calculateTargetHeading(int windDirection, float headingToDestination) {
@@ -61,4 +67,17 @@ int calculateTargetHeading(int windDirection, float headingToDestination) {
 int calculateRudderAngle(int targetHeading, float heading) {
   int rudderAngle;
   return rudderAngle;
+}
+
+int calculateSailAngle(int windDirection) {
+  int sailAngle;
+  windDirection -= 180;
+  windDirection = abs(windDirection);
+  if (windDirection <= 40) {
+    sailAngle = 0;
+  }
+  else {
+    sailAngle = map(windDirection, 41, 180, 0, 179);
+  }
+  return sailAngle;
 }
