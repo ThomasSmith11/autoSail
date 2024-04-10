@@ -14,70 +14,65 @@ Servo mainsheet;
 TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
+float currentLat, currentLong;
+float destLat, destLong;
 
-int windDirection;
-int windSensorOutput;
+int windDirection, windSensorOutput;
 
 int mainsheetTrim;
 int rudderPosition;
 float destHeading;
+float currentHeading;
 int targHeading;
+float velocity;
+
+float waypointList[10][2] = {
+  { 0.0, 0.0},
+  { 0.0, 0.0},
+  { 0.0, 0.0},
+  { 0.0, 0.0},
+  { 0.0, 0.0}
+};
+
+bool manualControl;
 
 void setup() {
   Serial.begin(115200);
   ss.begin(GPSBaud);
-  compass.init();
-  rudder.attach(9);
-  rudder.write(90);
-
   mainsheet.attach(11);
 }
 
 void loop() {
-  while (ss.available() > 0) { // collect gps data first
-    gps.encode(ss.read());
-  }
-
+  while (ss.available() > 0)
+    if (gps.encode(ss.read()))
+      processGPS();
   windSensorOutput = analogRead(windSensorPin);
-  windDirection = map(windSensorOutput, 0,1006, 0, 359); // read wind direction next
-
-  mainsheetTrim = calculateSailAngle(windDirection); // calculate trim angle for sail
-
-  // destHeading = TinyGPS++::courseTo(gps.location.lat(), gps.location.lng(), targetLat, targetLon);
-
-  // targHeading = calculateTargetHeading(windDirection, destHeading);
-
-  // rudderPosition = calculateRudderAngle(targHeading, gps.course.deg());
-
-  // rudder.write(rudderPosition);
-  mainsheet.write(mainsheetTrim);
-
-  delay(500);   
-  }
+  windDirection = map(windSensorOutput, 0,1006, 0, 359);
+  mainsheetTrim = calculateSailAngle(windDirection);
+  mainsheet.writeMicroseconds(mainsheetTrim);
+}
     
-      
-}
-
-int calculateTargetHeading(int windDirection, float headingToDestination) {
-  int targetHeading;
-
-  return targetHeading;
-}
-
-int calculateRudderAngle(int targetHeading, float heading) {
-  int rudderAngle;
-  return rudderAngle;
-}
 
 int calculateSailAngle(int windDirection) {
   int sailAngle;
   windDirection -= 180;
   windDirection = abs(windDirection);
-  if (windDirection <= 40) {
-    sailAngle = 0;
+  if (windDirection < 45) {
+    sailAngle = 1750;
   }
   else {
-    sailAngle = map(windDirection, 41, 180, 0, 179);
+    sailAngle = map(windDirection, 45, 180, 1750, 1150);
   }
   return sailAngle;
+}
+
+void processGPS()
+{
+  if (gps.location.isValid())
+  {
+    currentLat = gps.location.lat();
+    currentLong = gps.location.lng();
+    currentHeading = gps.course.deg();
+    // velocity = gps.speed.knots();
+  }
 }
