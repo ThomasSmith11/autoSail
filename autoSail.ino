@@ -52,7 +52,7 @@ void loop() {
   mainsheetTrim = calculateSailAngle(windDirection);
   mainsheet.writeMicroseconds(mainsheetTrim);
   rudderPosition = calculateRudderPosition(prevLat, prevLon, currentLat, currentLon, destLat, destLon, currentHeading, destHeading, windDirection);
-  rudder.write(rudderPosition);
+  rudder.writeMicroseconds(rudderPosition);
 }
 
 
