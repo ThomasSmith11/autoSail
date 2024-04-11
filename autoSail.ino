@@ -14,19 +14,20 @@ Servo mainsheet;
 TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
-float currentLat, currentLon;
-float destLat, destLon;
+double prevLat, prevLon;
+double currentLat, currentLon;
+double destLat, destLon;
 
 int windDirection, windSensorOutput;
 
 int mainsheetTrim;
 int rudderPosition;
-float destHeading;
-float currentHeading;
+double destHeading;
+double currentHeading;
 int targHeading;
-float velocity;
+double velocity;
 
-float waypointList[10][2] = {
+double waypointList[10][2] = {
   { 0.0, 0.0},
   { 0.0, 0.0},
   { 0.0, 0.0},
@@ -50,6 +51,8 @@ void loop() {
   windDirection = map(windSensorOutput, 0,1006, 0, 359);
   mainsheetTrim = calculateSailAngle(windDirection);
   mainsheet.writeMicroseconds(mainsheetTrim);
+  rudderPosition = calculateRudderPosition(prevLat, prevLon, currentLat, currentLon, destLat, destLon, currentHeading, destHeading, windDirection);
+  rudder.write(rudderPosition);
 }
 
 
@@ -76,9 +79,41 @@ void processGPS() {
   }
 }
 
-float calculateDistanceOffLine(float destLat, float destLon, float prevLat, float prevLon, float lat, float lon, float destHeading) {
-  float headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
-  float distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
-  float theta = radians(headingFromPrevToCurrent - destHeading);
+
+double calculateDistanceOffLine(double destLat, double destLon, double prevLat, double prevLon, double lat, double lon, double destHeading) {
+  double headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
+  double distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
+  double theta = radians(headingFromPrevToCurrent - destHeading);
   return distanceFromPrevToCurrent * sin(theta);
+}
+
+
+int calculateRudderPosition(double prevLat, double prevLon, double currentLat, double currentLon, double destLat, double destLon, double currentHeading, double destHeading, int windDirection) {
+  int rudderScale;
+  targHeading = calculateTargetHeading(destHeading, windDirection);
+  if (targHeading == -1) {
+    double distanceAway = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
+    if (distanceAway < 3) {
+      //targetHeading = 40 degrees off wind in whatever direction already facing
+    }
+    else {
+      //initiate tack
+      //targetHeading = 40 degrees off wind in whatever direction not facing
+    }
+  }
+  
+  //change rudder scale in 5 degree increments, such that above 30 degrees off course we get maximum steering,
+  //then smoother steering as we approach the correct course.  Max rudder scale should be 6, min -6
+
+  return rudderScale*50+1450;
+}
+
+
+int calculateTargetHeading(double destHeading, int windDirection) {
+  if (abs(windDirection-180) > 40) {
+    return int(destHeading+.5);
+  }
+  else {
+    return -1;
+  }
 }
