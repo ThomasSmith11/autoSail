@@ -14,8 +14,8 @@ Servo mainsheet;
 TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
-float currentLat, currentLong;
-float destLat, destLong;
+float currentLat, currentLon;
+float destLat, destLon;
 
 int windDirection, windSensorOutput;
 
@@ -51,7 +51,7 @@ void loop() {
   mainsheetTrim = calculateSailAngle(windDirection);
   mainsheet.writeMicroseconds(mainsheetTrim);
 }
-    
+
 
 int calculateSailAngle(int windDirection) {
   int sailAngle;
@@ -66,13 +66,19 @@ int calculateSailAngle(int windDirection) {
   return sailAngle;
 }
 
-void processGPS()
-{
+void processGPS() {
   if (gps.location.isValid())
   {
     currentLat = gps.location.lat();
-    currentLong = gps.location.lng();
+    currentLon = gps.location.lng();
     currentHeading = gps.course.deg();
     // velocity = gps.speed.knots();
   }
+}
+
+float calculateDistanceOffLine(float destLat, float destLon, float prevLat, float prevLon, float lat, float lon, float destHeading) {
+  float headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
+  float distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
+  float theta = radians(headingFromPrevToCurrent - destHeading);
+  return distanceFromPrevToCurrent * sin(theta);
 }
