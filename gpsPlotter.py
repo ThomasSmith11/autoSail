@@ -1,23 +1,27 @@
 import tkinter
 import customtkinter
 from tkintermapview import TkinterMapView
+from tkintermapview.canvas_position_marker import CanvasPositionMarker
 
 customtkinter.set_default_color_theme("blue")
+
+class CustomWaypointMarker(CanvasPositionMarker):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.text_color = "#C5542D"
 
 class CustomMapView(TkinterMapView):
     
     def __init__(self, app, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.app = app
-      
     
     def mouse_right_click(self, event):
         coordinate_mouse_pos = self.convert_canvas_coords_to_decimal_coords(event.x, event.y)
 
         def click_coordinates_event():
             try:
-                self.set_marker(coordinate_mouse_pos[0], coordinate_mouse_pos[1])
-                tkinter.messagebox.showinfo(title="", message="Waypoint added!")
+                self.set_marker(coordinate_mouse_pos[0], coordinate_mouse_pos[1], text=(str(len(app.waypointList)+1)))
                 app.update_waypoints_listbox()
 
             except Exception as err:
@@ -27,6 +31,12 @@ class CustomMapView(TkinterMapView):
         m.add_command(label=f"Add Waypoint", command=click_coordinates_event)
 
         m.tk_popup(event.x_root, event.y_root)
+    
+    def set_marker(self, deg_x: float, deg_y: float, text: str = None, **kwargs) -> CustomWaypointMarker:
+        marker = CustomWaypointMarker(self, (deg_x, deg_y), text=text, **kwargs)
+        marker.draw()
+        self.canvas_marker_list.append(marker)
+        return marker
 
 
 class App(customtkinter.CTk):
@@ -65,7 +75,12 @@ class App(customtkinter.CTk):
         self.clearWaypointsButton = customtkinter.CTkButton(master=self.infoFrame,
                                                 text="Clear Waypoints",
                                                 command=self.clearWaypoints)
-        self.clearWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=3, column=0)
+        self.clearWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=4, column=0)
+
+        self.removeRecentWaypointButton = customtkinter.CTkButton(master=self.infoFrame,
+                                                text="Remove Most Recent Waypoint",
+                                                command=self.removeRecentWaypoint)
+        self.removeRecentWaypointButton.grid(pady=(20, 0), padx=(20, 20), row=3, column=0)
 
         self.waypoints_listbox = tkinter.Listbox(self.infoFrame)
 
@@ -112,16 +127,21 @@ class App(customtkinter.CTk):
             lat, lon = waypoint.position
             self.waypoints_listbox.insert(tkinter.END, f"Waypoint {i}: {lat}, {lon}")
 
+    def removeRecentWaypoint(self):
+        if len(self.waypointList != 0):
+            self.waypointList[-1].delete()
+            self.update_waypoints_listbox()
+
     def clearWaypoints(self):
-        for waypoint in self.waypointList:
-            waypoint.delete()
+        for i in range(len(self.waypointList) - 1, -1, -1):
+            self.waypointList[i].delete()
         self.waypointList.clear()
+        self.update_waypoints_listbox()
 
     def sendWaypoints(self):
         coordList = []
         for waypoint in self.waypointList:
             coordList.append(waypoint.position)
-
         # actually transmit coords here somehow
 
     def on_closing(self, event=0):
