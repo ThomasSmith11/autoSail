@@ -15,6 +15,7 @@ class CustomMapView(TkinterMapView):
     def __init__(self, app, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.app = app
+        self.tile_server = "https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga"
     
     def mouse_right_click(self, event):
         coordinate_mouse_pos = self.convert_canvas_coords_to_decimal_coords(event.x, event.y)
@@ -111,9 +112,10 @@ class App(customtkinter.CTk):
         self.searchButton = customtkinter.CTkButton(master=self.mapFrame, text="Search", width=90, command=self.search_event)
         self.searchButton.grid(row=0, column=1, sticky="w", padx=(12, 0), pady=12)
 
-        # Set default values
+        self.instruction = customtkinter.CTkLabel(self.mapFrame, text="Right click to place waypoint")
+        self.instruction.grid(row=0, column=2, padx=(10, 0), pady=12, sticky="w")
+
         self.map_widget.set_address("Wilmington, NC")
-        self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
 
     def search_event(self, event=None):
         self.map_widget.set_address(self.entry.get())
@@ -128,7 +130,7 @@ class App(customtkinter.CTk):
             self.waypoints_listbox.insert(tkinter.END, f"Waypoint {i}: {lat}, {lon}")
 
     def removeRecentWaypoint(self):
-        if len(self.waypointList != 0):
+        if len(self.waypointList) != 0:
             self.waypointList[-1].delete()
             self.update_waypoints_listbox()
 
