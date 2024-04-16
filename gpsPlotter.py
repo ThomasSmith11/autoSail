@@ -167,8 +167,7 @@ class App(customtkinter.CTk):
         coordList = []
         for waypoint in self.waypointList:
             coordList.append(list(waypoint.position))
-        print(coordList)
-        serialCon = serial.Serial(self.serial_port, 9600)
+        serialCon = serial.Serial(self.serial_port, 115200)
 
         inData = ""
         while inData != "Ready":  #wait for the arduino to signal it is ready to recieve data

@@ -1,58 +1,112 @@
-#include <math.h>
 #include <Servo.h>
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
-using namespace std;
 
+static const int rudderPin 12
+static const int mainsheetPin 13
 static const int windSensorPin = A5;
 static const int TXPin = 4, RXPin = 5;
 static const uint32_t GPSBaud = 9600;
+
 
 Servo rudder;
 Servo mainsheet;
 TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
-double prevLat, prevLon;
-double currentLat, currentLon;
-double destLat, destLon;
 
-int windDirection, windSensorOutput;
+float prevLat, prevLon;
+float currentLat, currentLon;
+float destLat, destLon;
 
+
+// Sensor inputs
+int windSensorValue, mainsheetValue, rudderValue;
+
+
+int windDirection;
 int mainsheetTrim;
 int rudderPosition;
-double destHeading;
-double currentHeading;
+float destHeading;
+float currentHeading;
 int targHeading;
-double velocity;
+float velocity;
 
-double waypointList[10][2] = {
-  { 0.0, 0.0},
-  { 0.0, 0.0},
-  { 0.0, 0.0},
-  { 0.0, 0.0},
-  { 0.0, 0.0}
+struct GPSCoordinate {
+  float latitude;
+  float longitude;
 };
 
-bool manualControl;
+char inData[26];
+int numCoords = 0;
+GPSCoordinate coordinates[32];
+
+
+volatile bool manualControl;
+
 
 void setup() {
   Serial.begin(115200);
   ss.begin(GPSBaud);
   mainsheet.attach(11);
+  Serial.println("Ready\n");
+  while (true) {
+    int index = 0;
+    while (true) {
+      if (Serial.available() > 0) {
+        char c = Serial.read();
+        if (c == '\n') {
+          inData[index++] = '\0';
+          break;
+        } else {
+          inData[index++] = c;
+        }
+      }
+    }
+    
+    if (strcmp(inData, "␄") == 0) {
+      break;
+    }
+    
+    coordinates[numCoords++] = parseCoordinateString(inData);
+  }
 }
 
+
 void loop() {
-  while (ss.available() > 0)
-    if (gps.encode(ss.read()))
-      processGPS();
-  windSensorOutput = analogRead(windSensorPin);
-  windDirection = map(windSensorOutput, 0,1006, 0, 359);
-  mainsheetTrim = calculateSailAngle(windDirection);
-  mainsheet.writeMicroseconds(mainsheetTrim);
-  rudderPosition = calculateRudderPosition(prevLat, prevLon, currentLat, currentLon, destLat, destLon, currentHeading, destHeading, windDirection);
-  rudder.writeMicroseconds(rudderPosition);
+  if (manualControl) {
+    mainsheetValue = pulseIn(mainsheetPin, HIGH);
+    mainsheetTrim = map(mainsheetValue, 1150, 1800, 50, 130);
+    mainsheet.write(mainsheetAngle);
+    rudderValue = pulseIn(rudderPin, HIGH);
+    rudderPosition = map(rudderValue, 1150, 1800, 45, 135);
+    rudder.write(rudderAngle);
+  }
+  else {
+    while (ss.available() > 0)
+      if (gps.encode(ss.read()))
+        processGPS();
+    windSensorValue = analogRead(windSensorPin);
+    windDirection = map(windSensorValue, 0,1006, 0, 359);
+    mainsheetTrim = calculateSailAngle(windDirection);
+    mainsheet.writeMicroseconds(mainsheetTrim);
+    rudderPosition = calculateRudderPosition(prevLat, prevLon, currentLat, currentLon, destLat, destLon, currentHeading, destHeading, windDirection);
+    rudder.writeMicroseconds(rudderPosition);
+  }
+}
+
+
+GPSCoordinate parseCoordinateString(char* gpsString) {
+  GPSCoordinate coord;
+  char *lat_str = strtok(gpsString, ",");
+  char *lon_str = strtok(NULL, ",");
+  if (lat_str != NULL && lon_str != NULL) {
+    float lat = atof(lat_str);
+    float lon = atof(lon_str);
+    coord = {lat, lon};
+  }
+  return coord;
 }
 
 
@@ -69,6 +123,7 @@ int calculateSailAngle(int windDirection) {
   return sailAngle;
 }
 
+
 void processGPS() {
   if (gps.location.isValid())
   {
@@ -80,19 +135,19 @@ void processGPS() {
 }
 
 
-double calculateDistanceOffLine(double destLat, double destLon, double prevLat, double prevLon, double lat, double lon, double destHeading) {
-  double headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
-  double distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
-  double theta = radians(headingFromPrevToCurrent - destHeading);
+float calculateDistanceOffLine(float destLat, float destLon, float prevLat, float prevLon, float lat, float lon, float destHeading) {
+  float headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
+  float distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
+  float theta = radians(headingFromPrevToCurrent - destHeading);
   return distanceFromPrevToCurrent * sin(theta);
 }
 
 
-int calculateRudderPosition(double prevLat, double prevLon, double currentLat, double currentLon, double destLat, double destLon, double currentHeading, double destHeading, int windDirection) {
+int calculateRudderPosition(float prevLat, float prevLon, float currentLat, float currentLon, float destLat, float destLon, float currentHeading, float destHeading, int windDirection) {
   int rudderScale;
   targHeading = calculateTargetHeading(destHeading, windDirection);
   if (targHeading == -1) {
-    double distanceAway = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
+    float distanceAway = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
     if (distanceAway < 3) {
       //targetHeading = 40 degrees off wind in whatever direction already facing
     }
@@ -109,7 +164,7 @@ int calculateRudderPosition(double prevLat, double prevLon, double currentLat, d
 }
 
 
-int calculateTargetHeading(double destHeading, int windDirection) {
+int calculateTargetHeading(float destHeading, int windDirection) {
   if (abs(windDirection-180) > 40) {
     return int(destHeading+.5);
   }
