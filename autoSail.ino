@@ -3,8 +3,8 @@
 #include <SoftwareSerial.h>
 
 
-static const int rudderPin 12
-static const int mainsheetPin 13
+static const int rudderPin = 12;
+static const int mainsheetPin = 13;
 static const int windSensorPin = A5;
 static const int TXPin = 4, RXPin = 5;
 static const uint32_t GPSBaud = 9600;
@@ -78,10 +78,10 @@ void loop() {
   if (manualControl) {
     mainsheetValue = pulseIn(mainsheetPin, HIGH);
     mainsheetTrim = map(mainsheetValue, 1150, 1800, 50, 130);
-    mainsheet.write(mainsheetAngle);
+    mainsheet.write(mainsheetTrim);
     rudderValue = pulseIn(rudderPin, HIGH);
     rudderPosition = map(rudderValue, 1150, 1800, 45, 135);
-    rudder.write(rudderAngle);
+    rudder.write(rudderPosition);
   }
   else {
     while (ss.available() > 0)
