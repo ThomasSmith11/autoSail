@@ -168,27 +168,29 @@ class App(customtkinter.CTk):
         coordList = []
         for waypoint in self.waypointList:
             coordList.append(list(waypoint.position))
+        try:
+            #disable reset after serial disconnect
+            with open(self.serial_port) as f:
+                attrs = termios.tcgetattr(f)
+                attrs[2] = attrs[2] & ~termios.HUPCL
+                termios.tcsetattr(f, termios.TCSAFLUSH, attrs)
 
-        #disable reset after serial disconnect
-        with open(self.serial_port) as f:
-            attrs = termios.tcgetattr(f)
-            attrs[2] = attrs[2] & ~termios.HUPCL
-            termios.tcsetattr(f, termios.TCSAFLUSH, attrs)
+            serialCon = serial.Serial(self.serial_port, 115200)
 
-        serialCon = serial.Serial(self.serial_port, 115200)
+            inData = ""
+            while inData != "Ready":  #wait for the arduino to signal it is ready to recieve data
+                inData = serialCon.readline().strip().decode()
 
-        inData = ""
-        while inData != "Ready":  #wait for the arduino to signal it is ready to recieve data
-            inData = serialCon.readline().strip().decode()
-
-        for coord in coordList:
-            lat = "{:.8f}".format(coord[0])
-            lon = "{:.8f}".format(coord[1])
-            lat_lon_str = lat+','+lon+'\n'
-            bytes = serialCon.write(lat_lon_str.encode())
-        bytes = serialCon.write("␄\n".encode())
-        serialCon.close()
-        tkinter.messagebox.showinfo(title="", message="Waypoints sent!")
+            for coord in coordList:
+                lat = "{:.8f}".format(coord[0])
+                lon = "{:.8f}".format(coord[1])
+                lat_lon_str = lat+','+lon+'\n'
+                bytes = serialCon.write(lat_lon_str.encode())
+            bytes = serialCon.write("␄\n".encode())
+            serialCon.close()
+            tkinter.messagebox.showinfo(title="", message="Waypoints sent!")
+        except FileNotFoundError:
+            tkinter.messagebox.showinfo(title="", message="Please select a valid port")
 
     def on_closing(self, event=0):
         self.destroy()
