@@ -1,9 +1,12 @@
+import time
+import serial
 import tkinter
 import customtkinter
+import serial.tools.list_ports
 from tkintermapview import TkinterMapView
 from tkintermapview.canvas_position_marker import CanvasPositionMarker
 
-customtkinter.set_default_color_theme("blue")
+customtkinter.set_default_color_theme("dark-blue")
 
 class CustomWaypointMarker(CanvasPositionMarker):
     def __init__(self, *args, **kwargs):
@@ -43,12 +46,12 @@ class CustomMapView(TkinterMapView):
 class App(customtkinter.CTk):
 
     APP_NAME = "AutoSail GPS Plotter"
-    WIDTH = 1200
+    WIDTH = 1400
     HEIGHT = 800
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        customtkinter.set_appearance_mode("dark")
         self.title(App.APP_NAME)
         self.geometry(str(App.WIDTH) + "x" + str(App.HEIGHT))
         self.minsize(App.WIDTH, App.HEIGHT)
@@ -67,31 +70,39 @@ class App(customtkinter.CTk):
         self.infoFrame.grid(row=0, column=0, padx=0, pady=0, sticky="nsew")
 
         self.mapFrame = customtkinter.CTkFrame(master=self, corner_radius=0)
-        self.mapFrame.grid(row=0, column=1, rowspan=1, pady=0, padx=0, sticky="nsew")
+        self.mapFrame.grid(row=0, column=1, rowspan=1, pady=(0, 20), padx=(0, 20), sticky="nsew")
 
         # ============ info frame ============
 
-        self.infoFrame.grid_rowconfigure(2, weight=1)
+        self.infoFrame.grid_rowconfigure(3, weight=1)
 
         self.clearWaypointsButton = customtkinter.CTkButton(master=self.infoFrame,
                                                 text="Clear Waypoints",
                                                 command=self.clearWaypoints)
-        self.clearWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=4, column=0)
+        self.clearWaypointsButton.grid(pady=(20, 20), padx=(20, 20), row=5, column=0)
 
         self.removeRecentWaypointButton = customtkinter.CTkButton(master=self.infoFrame,
-                                                text="Remove Most Recent Waypoint",
+                                                text="Remove Latest Waypoint",
                                                 command=self.removeRecentWaypoint)
-        self.removeRecentWaypointButton.grid(pady=(20, 0), padx=(20, 20), row=3, column=0)
+        self.removeRecentWaypointButton.grid(pady=(0, 0), padx=(20, 20), row=4, column=0)
 
-        self.waypoints_listbox = tkinter.Listbox(self.infoFrame)
+        self.waypoints_listbox = tkinter.Listbox(self.infoFrame, fg="white", bg="black")
 
-        self.waypoints_listbox.grid(row=2, column=0, padx=(20, 20), pady=(20, 20), sticky="nsew")
+        self.waypoints_listbox.grid(row=3, column=0, padx=(20, 20), pady=(20, 20), sticky="nsew")
 
         self.sendWaypointsButton = customtkinter.CTkButton(master=self.infoFrame,
                                                 text="Send Waypoints to Vessel",
                                                 command=self.sendWaypoints)
 
-        self.sendWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=1, column=0)
+        self.sendWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=2, column=0)
+        self.serial_ports = ["No port selected"]
+        self.get_serial_ports()
+        self.serial_port = self.serial_ports[-1]
+        self.serial_port_label = customtkinter.CTkLabel(self.infoFrame, text="Port:")
+        self.serial_port_label.grid(pady=(20, 0), padx=(30, 0), row=1, column=0, sticky="w")
+        self.port_option_menu = customtkinter.CTkOptionMenu(self.infoFrame, values=self.serial_ports,
+                                                                       command=self.change_port)
+        self.port_option_menu.grid(row=1, column=0, padx=(0, 30), pady=(20, 0), sticky="e")
 
         # ============ map frame ============
 
@@ -113,21 +124,33 @@ class App(customtkinter.CTk):
         self.searchButton.grid(row=0, column=1, sticky="w", padx=(12, 0), pady=12)
 
         self.instruction = customtkinter.CTkLabel(self.mapFrame, text="Right click to place waypoint")
-        self.instruction.grid(row=0, column=2, padx=(10, 0), pady=12, sticky="w")
+        self.instruction.grid(row=0, column=2, padx=(10, 20), pady=12, sticky="ew")
 
         self.map_widget.set_address("Wilmington, NC")
+
+    def get_serial_ports(self):
+        ports = [port.device for port in serial.tools.list_ports.comports()]
+        ports.append("No port selected")
+        self.serial_ports = ports
+        self.after(1000, self.get_serial_ports)
+
+    def change_port(self, port):
+        self.serial_port = port
 
     def search_event(self, event=None):
         self.map_widget.set_address(self.entry.get())
 
     def update_waypoints_listbox(self):
-        # Clear the listbox
         self.waypoints_listbox.delete(0, tkinter.END)
 
-        # Add waypoints to the listbox
         for i, waypoint in enumerate(self.waypointList, start=1):
             lat, lon = waypoint.position
-            self.waypoints_listbox.insert(tkinter.END, f"Waypoint {i}: {lat}, {lon}")
+            lat_str = "{:.5f}".format(lat)
+            lon_str = "{:.5f}".format(lon)
+            curWidth = 2*len(str(i)) + len(lat_str)+len(lon_str)
+            padWidth = 23 - curWidth
+            space = " "
+            self.waypoints_listbox.insert(tkinter.END, f"{i}:{space*padWidth}{lat_str}, {lon_str}")
 
     def removeRecentWaypoint(self):
         if len(self.waypointList) != 0:
@@ -143,8 +166,18 @@ class App(customtkinter.CTk):
     def sendWaypoints(self):
         coordList = []
         for waypoint in self.waypointList:
-            coordList.append(waypoint.position)
-        # actually transmit coords here somehow
+            coordList.append(list(waypoint.position))
+        print(coordList)
+        serialCon = serial.Serial(self.serial_port, 9600)
+        time.sleep(5) #wait for the arduino to wake up after opening a serial connection
+        for coord in coordList:
+            lat = "{:.10f}".format(coord[0])
+            lon = "{:.10f}".format(coord[1])
+            lat_lon_str = lat+','+lon+'\n'
+            bytes = serialCon.write(lat_lon_str.encode())
+        bytes = serialCon.write("␄\n".encode())
+        serialCon.close()
+        tkinter.messagebox.showinfo(title="", message="Waypoints sent!")
 
     def on_closing(self, event=0):
         self.destroy()
