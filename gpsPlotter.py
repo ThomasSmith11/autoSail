@@ -96,12 +96,11 @@ class App(customtkinter.CTk):
 
         self.sendWaypointsButton.grid(pady=(20, 0), padx=(20, 20), row=2, column=0)
         self.serial_ports = ["No port selected"]
-        self.get_serial_ports()
+        self.port_option_menu = customtkinter.CTkOptionMenu(self.infoFrame, values=self.serial_ports, command=self.change_port)
+        self.get_serial_ports(self.port_option_menu)
         self.serial_port = self.serial_ports[-1]
         self.serial_port_label = customtkinter.CTkLabel(self.infoFrame, text="Port:")
         self.serial_port_label.grid(pady=(20, 0), padx=(30, 0), row=1, column=0, sticky="w")
-        self.port_option_menu = customtkinter.CTkOptionMenu(self.infoFrame, values=self.serial_ports,
-                                                                       command=self.change_port)
         self.port_option_menu.grid(row=1, column=0, padx=(0, 30), pady=(20, 0), sticky="e")
 
         # ============ map frame ============
@@ -128,11 +127,12 @@ class App(customtkinter.CTk):
 
         self.map_widget.set_address("Wilmington, NC")
 
-    def get_serial_ports(self):
+    def get_serial_ports(self, port_option_menu):
         ports = [port.device for port in serial.tools.list_ports.comports()]
         ports.append("No port selected")
         self.serial_ports = ports
-        self.after(1000, self.get_serial_ports)
+        port_option_menu.configure(values=self.serial_ports)
+        self.after(1000, self.get_serial_ports, port_option_menu)
 
     def change_port(self, port):
         self.serial_port = port
@@ -169,10 +169,14 @@ class App(customtkinter.CTk):
             coordList.append(list(waypoint.position))
         print(coordList)
         serialCon = serial.Serial(self.serial_port, 9600)
-        time.sleep(5) #wait for the arduino to wake up after opening a serial connection
+
+        inData = ""
+        while inData != "Ready":  #wait for the arduino to signal it is ready to recieve data
+            inData = serialCon.readline().strip().decode()
+
         for coord in coordList:
-            lat = "{:.10f}".format(coord[0])
-            lon = "{:.10f}".format(coord[1])
+            lat = "{:.8f}".format(coord[0])
+            lon = "{:.8f}".format(coord[1])
             lat_lon_str = lat+','+lon+'\n'
             bytes = serialCon.write(lat_lon_str.encode())
         bytes = serialCon.write("␄\n".encode())
