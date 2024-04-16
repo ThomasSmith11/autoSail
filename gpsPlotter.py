@@ -1,6 +1,7 @@
 import time
 import serial
 import tkinter
+import termios
 import customtkinter
 import serial.tools.list_ports
 from tkintermapview import TkinterMapView
@@ -167,6 +168,13 @@ class App(customtkinter.CTk):
         coordList = []
         for waypoint in self.waypointList:
             coordList.append(list(waypoint.position))
+
+        #disable reset after serial disconnect
+        with open(self.serial_port) as f:
+            attrs = termios.tcgetattr(f)
+            attrs[2] = attrs[2] & ~termios.HUPCL
+            termios.tcsetattr(f, termios.TCSAFLUSH, attrs)
+
         serialCon = serial.Serial(self.serial_port, 115200)
 
         inData = ""
