@@ -29,9 +29,10 @@ int windDirection;
 int mainsheetTrim;
 int rudderPosition;
 float destHeading;
-float currentHeading;
+int currentHeading;
 int targHeading;
 float velocity;
+float distanceOffLine;
 
 struct GPSCoordinate {
   float latitude;
@@ -87,11 +88,15 @@ void loop() {
     while (ss.available() > 0)
       if (gps.encode(ss.read()))
         processGPS();
+
     windSensorValue = analogRead(windSensorPin);
     windDirection = map(windSensorValue, 0,1006, 0, 359);
     mainsheetTrim = calculateSailAngle(windDirection);
     mainsheet.writeMicroseconds(mainsheetTrim);
-    rudderPosition = calculateRudderPosition(prevLat, prevLon, currentLat, currentLon, destLat, destLon, currentHeading, destHeading, windDirection);
+
+    distanceOffLine = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
+    targHeading = calculateTargetHeading(destHeading, currentHeading, windDirection, distanceOffLine);
+    rudderPosition = calculateRudderPosition(currentHeading, targHeading);
     rudder.writeMicroseconds(rudderPosition);
   }
 }
@@ -129,7 +134,7 @@ void processGPS() {
   {
     currentLat = gps.location.lat();
     currentLon = gps.location.lng();
-    currentHeading = gps.course.deg();
+    currentHeading = int(gps.course.deg()+.5);
     // velocity = gps.speed.knots();
   }
 }
@@ -143,32 +148,56 @@ float calculateDistanceOffLine(float destLat, float destLon, float prevLat, floa
 }
 
 
-int calculateRudderPosition(float prevLat, float prevLon, float currentLat, float currentLon, float destLat, float destLon, float currentHeading, float destHeading, int windDirection) {
+int calculateRudderPosition(int currentHeading, int targHeading) {
   int rudderScale;
-  targHeading = calculateTargetHeading(destHeading, windDirection);
-  if (targHeading == -1) {
-    float distanceAway = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
-    if (distanceAway < 3) {
-      //targetHeading = 40 degrees off wind in whatever direction already facing
-    }
-    else {
-      //initiate tack
-      //targetHeading = 40 degrees off wind in whatever direction not facing
-    }
-  }
   
-  //change rudder scale in 5 degree increments, such that above 30 degrees off course we get maximum steering,
+  int clockwiseDiff = (targHeading - currentHeading + 360) % 360;
+  int counterclockwiseDiff = (currentHeading - targHeading + 360) % 360;
+
+  if (clockwiseDiff < counterclockwiseDiff) {
+      rudderScale = calcRudderScale(abs(targHeading-currentHeading));
+  } else {
+      rudderScale = calcRudderScale(abs(targHeading-currentHeading))*-1;
+  }
+
+  //change rudder scale in 5 degree increments, such that above ~40 degrees off course we get maximum steering,
   //then smoother steering as we approach the correct course.  Max rudder scale should be 6, min -6
 
   return rudderScale*50+1450;
 }
 
 
-int calculateTargetHeading(float destHeading, int windDirection) {
-  if (abs(windDirection-180) > 40) {
-    return int(destHeading+.5);
+int calcRudderScale(int headingDiff) {
+
+  if (headingDiff >= 42) {
+    return 6;
   }
   else {
-    return -1;
+    return headingDiff/7;
+  }
+}
+
+
+int calculateTargetHeading(float destHeading, int currentHeading, int windDirection, float distanceAway) {
+  int headingToWind = windDirection - 180;
+  if (abs(headingToWind) > 40) {
+    return int(destHeading+.5); //round destHeading to nearest whole number
+  }
+  else {
+    int actualWindDirection = (windDirection+currentHeading)%360;
+    if (distanceAway < 3) {
+      int clockwiseDiff = (actualWindDirection - currentHeading + 360) % 360;
+      int counterclockwiseDiff = (actualWindDirection - currentHeading + 360) % 360;
+      bool starboard = (clockwiseDiff>counterclockwiseDiff);
+      if (starboard) {
+        return (actualWindDirection + 320) % 360;
+      }
+      else {
+        return (actualWindDirection + 40) % 360;
+      }
+    }
+    else {
+      //figure out which side of the "line" you're on, and head back towards it
+    }
   }
 }
