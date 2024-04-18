@@ -2,6 +2,10 @@
 #include <TinyGPS++.h>
 #include <SoftwareSerial.h>
 
+struct GPSCoordinate {
+  float latitude;
+  float longitude;
+};
 
 static const int rudderPin = 12;
 static const int mainsheetPin = 13;
@@ -16,9 +20,8 @@ TinyGPSPlus gps;
 SoftwareSerial ss(RXPin, TXPin);
 
 
-float prevLat, prevLon;
-float currentLat, currentLon;
-float destLat, destLon;
+int prevIndex, destIndex;
+GPSCoordinate prevCoords, currCoords, destCoords;
 
 
 // Sensor inputs
@@ -33,11 +36,6 @@ int currentHeading;
 int targHeading;
 float velocity;
 float distanceOffLine;
-
-struct GPSCoordinate {
-  float latitude;
-  float longitude;
-};
 
 char inData[26];
 int numCoords = 0;
@@ -94,8 +92,14 @@ void loop() {
     mainsheetTrim = calculateSailAngle(windDirection);
     mainsheet.writeMicroseconds(mainsheetTrim);
 
-    distanceOffLine = calculateDistanceOffLine(destLat, destLon, prevLat, prevLon, currentLat, currentLon, destHeading);
-    targHeading = calculateTargetHeading(destHeading, currentHeading, windDirection, distanceOffLine);
+    prevCoords = coordinates[prevIndex];
+    destCoords = coordinates[prevIndex];
+
+    float destHeading = TinyGPSPlus::courseTo(currCoords.latitude, currCoords.longitude, prevCoords.latitude, prevCoords.longitude);
+
+    distanceOffLine = calculateDistanceOffLine(destHeading, currCoords, prevCoords);
+    bool toRightOfLine = determineSideofLine(destCoords, currCoords, prevCoords);
+    targHeading = calculateTargetHeading(destHeading, currentHeading, windDirection, distanceOffLine, toRightOfLine);
     rudderPosition = calculateRudderPosition(currentHeading, targHeading);
     rudder.writeMicroseconds(rudderPosition);
   }
@@ -132,19 +136,40 @@ int calculateSailAngle(int windDirection) {
 void processGPS() {
   if (gps.location.isValid())
   {
-    currentLat = gps.location.lat();
-    currentLon = gps.location.lng();
+    currCoords.latitude = gps.location.lat();
+    currCoords.longitude = gps.location.lng();
     currentHeading = int(gps.course.deg()+.5);
     // velocity = gps.speed.knots();
   }
 }
 
 
-float calculateDistanceOffLine(float destLat, float destLon, float prevLat, float prevLon, float lat, float lon, float destHeading) {
-  float headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, lat, lon);
-  float distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, lat, lon);
+float calculateDistanceOffLine(float destHeading, GPSCoordinate current, GPSCoordinate previous) {
+  float currLat = current.latitude;
+  float currLon = current.longitude;
+  float prevLat = previous.latitude;
+  float prevLon = previous.longitude;
+
+  float headingFromPrevToCurrent = TinyGPSPlus::courseTo(prevLat, prevLon, currLat, currLon);
+  float distanceFromPrevToCurrent = TinyGPSPlus::distanceBetween(prevLat, prevLon, currLat, currLon);
   float theta = radians(headingFromPrevToCurrent - destHeading);
   return distanceFromPrevToCurrent * sin(theta);
+}
+
+
+bool determineSideofLine(GPSCoordinate destination, GPSCoordinate current, GPSCoordinate previous) {
+  float Ax = destination.latitude - previous.latitude;
+  float Ay = destination.longitude - previous.longitude;
+  float Bx = current.latitude - previous.latitude;
+  float By = current.longitude - previous.longitude;
+
+  float crossProduct = Ax * Ay - Bx * By;
+
+  if (crossProduct > 0) {
+    return 0;
+  } else {
+    return 1;
+  }
 }
 
 
@@ -160,14 +185,14 @@ int calculateRudderPosition(int currentHeading, int targHeading) {
       rudderScale = calcRudderScale(abs(targHeading-currentHeading))*-1;
   }
 
-  //change rudder scale in 5 degree increments, such that above ~40 degrees off course we get maximum steering,
-  //then smoother steering as we approach the correct course.  Max rudder scale should be 6, min -6
-
   return rudderScale*50+1450;
 }
 
 
 int calcRudderScale(int headingDiff) {
+
+// change rudder scale in 5 degree increments, such that above ~40 degrees off course we get maximum steering,
+// then smoother steering as we approach the correct course.  Max rudder scale should be 6, min -6
 
   if (headingDiff >= 42) {
     return 6;
@@ -178,7 +203,7 @@ int calcRudderScale(int headingDiff) {
 }
 
 
-int calculateTargetHeading(float destHeading, int currentHeading, int windDirection, float distanceAway) {
+int calculateTargetHeading(float destHeading, int currentHeading, int windDirection, float distanceAway, bool toRightOfLine) {
   int headingToWind = windDirection - 180;
   if (abs(headingToWind) > 40) {
     return int(destHeading+.5); //round destHeading to nearest whole number
@@ -197,7 +222,12 @@ int calculateTargetHeading(float destHeading, int currentHeading, int windDirect
       }
     }
     else {
-      //figure out which side of the "line" you're on, and head back towards it
+      if (toRightOfLine) {
+        return (actualWindDirection + 320) % 360;
+      }
+      else {
+        return (actualWindDirection + 40) % 360;
+      }
     }
   }
 }
