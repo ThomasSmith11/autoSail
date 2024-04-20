@@ -7,12 +7,16 @@ struct GPSCoordinate {
   float longitude;
 };
 
+static const int controlPin = 2;
+static const int TXPin = 4;
+static const int RXPin = 5;
+static const int rudderOutputPin = 9;
+static const int mainsheetOutputPin = 11;
 static const int rudderPin = 12;
 static const int mainsheetPin = 13;
 static const int windSensorPin = A5;
-static const int TXPin = 4, RXPin = 5;
 static const uint32_t GPSBaud = 115200;
-static const int pin = 2;
+
 unsigned long waveStart;
 unsigned long waveEnd;
 
@@ -52,7 +56,6 @@ volatile bool manualControl = 0;
 
 void setup() {
   Serial.begin(115200);
-  mainsheet.attach(11);
   Serial.println("Ready\n");
   while (true) {
     int index = 0;
@@ -74,12 +77,13 @@ void setup() {
     
     coordinates[numCoords++] = parseCoordinateString(inData);
   }
-  attachInterrupt(digitalPinToInterrupt(pin), handleInterrupt, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(controlPin), handleInterrupt, CHANGE);
 // Use hardware serial once running without serial monitor on
 //  Serial.end();
 //  Serial.begin(GPSBaud);
   ss.begin(GPSBaud);
-  mainsheet.attach(11);
+  rudder.attach(rudderOutputPin)
+  mainsheet.attach(mainsheetOutputPin);
 }
 
 
@@ -91,18 +95,23 @@ void loop() {
     rudder.writeMicroseconds(rudderPosition);
   }
   else {
-// Use hardware serial once running without serial monitor on
-//    while (Serial.available() > 0) {
-//      if (gps.encode(Serial.read())) {
-//        processGPS();
-//      }
-//    }
-  else {
+    // //Use hardware serial once running without serial monitor on
+    // while (Serial.available() > 0) {
+    //   if (gps.encode(Serial.read())) {
+    //     processGPS();
+    //   }
+    // }
     while (ss.available() > 0)
       if (gps.encode(ss.read()))
         processGPS();
 
-    destCoords = coordinates[destIndex];
+    if (prevIndex == NULL) {
+      prevIndex = -1;
+      destIndex = 0;
+      prevCoords = currCoords;
+      destCoords = coordinates[destIndex];
+    }
+
     if (TinyGPSPlus::distanceBetween(currCoords.latitude, currCoords.longitude, destCoords.latitude, destCoords.longitude) < 3) {
       prevIndex++;
       destIndex++;
@@ -110,14 +119,10 @@ void loop() {
       prevCoords = coordinates[prevIndex];
     }
 
-    //check if we hit a waypoint here, and if so update all the stuff
-
     windSensorValue = analogRead(windSensorPin);
     windDirection = map(windSensorValue, 0,1006, 0, 359);
     mainsheetTrim = calculateSailAngle(windDirection);
     mainsheet.writeMicroseconds(mainsheetTrim);
-
-    prevCoords = coordinates[prevIndex];
 
     float destHeading = TinyGPSPlus::courseTo(currCoords.latitude, currCoords.longitude, prevCoords.latitude, prevCoords.longitude);
 
