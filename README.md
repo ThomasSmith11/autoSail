@@ -28,7 +28,7 @@ This project is aimed at developing an autonomous sailboat navigation system usi
 
 
 ## Usage
-1. Replace sail winch servo with purchased one, and install 3d printed wind direction sensor mount (found [here](Supplementary_Files/autoSailWiring.png)) on the bow of the boat.
+1. Replace sail winch servo with purchased one, and install 3d printed wind direction sensor mount (found [here](Supplementary_Files)) on the bow of the boat.
 
 2. Connect the Arduino board to your boat's hardware using the wiring diagram [here](Supplementary_Files/autoSailWiring.png).
 
