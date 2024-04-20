@@ -44,5 +44,5 @@ This project is aimed at developing an autonomous sailboat navigation system usi
 This project is licensed under the MIT [License](LICENSE)
 
 ## Acknowledgments
-- Special thanks to [@paulienov](https://github.com/paulienov) for helping design, troubleshoot, and debug the whole system as well as for printing the sensor mount, to the Arduino forum for their support and to @TomSchimansky for making the [map view](https://github.com/TomSchimansky/TkinterMapView) for tkinter.
+- Special thanks to [@paulienov](https://github.com/paulienov) for helping design, troubleshoot, and debug the whole system as well as for printing the sensor mount.
 
