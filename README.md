@@ -28,15 +28,17 @@ This project is aimed at developing an autonomous sailboat navigation system usi
 
 
 ## Usage
-1. Connect the Arduino board to your boat's hardware using the wiring diagram [here](wiring).
+1. Replace sail winch servo with purchased one, and install 3d printed wind direction sensor mount (found [here](Supplementary_Files/autoSailWiring.png)) on the bow of the boat.
 
-2. Ensure that the boat is powered on.
+2. Connect the Arduino board to your boat's hardware using the wiring diagram [here](Supplementary_Files/autoSailWiring.png).
 
-2. Launch the Python application by running `python3 Coordinate_Plotter/gpsPlotter.py` and connect the arduino via USB.
+3. Ensure that the boat is powered on.
 
-3. Follow the on-screen instructions to select waypoints and send them to the boat.
+4. Launch the Python application by running `python3 Coordinate_Plotter/gpsPlotter.py` and connect the arduino via USB.
 
-5. Launch the boat, navigate to a safe location, then switch from manual control to autonomous control by pushing the left stick all the way to the right. You may regain manual control at any time by pushing the stick all the way to the left.
+5. Follow the on-screen instructions to select waypoints and send them to the boat.
+
+6. Launch the boat, navigate to a safe location, then switch from manual control to autonomous control by pushing the left stick all the way to the right. You may regain manual control at any time by pushing the stick all the way to the left.
 
 ## License
 This project is licensed under the MIT [License](LICENSE)
