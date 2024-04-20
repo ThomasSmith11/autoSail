@@ -1,4 +1,4 @@
-# Autonomous Boat Navigation System
+# Autonomous Sailing System
 
 ## Overview
 This project is aimed at developing an autonomous sailboat navigation system using Arduino and Python. The system enables the boat to navigate along a path of set waypoints autonomously.  Those waypoints can be selected graphically with a python app and uploaded to the vessel prior to launch.
