@@ -12,6 +12,10 @@ static const int mainsheetPin = 13;
 static const int windSensorPin = A5;
 static const int TXPin = 4, RXPin = 5;
 static const uint32_t GPSBaud = 115200;
+static const int pin = 2;
+unsigned long waveStart;
+unsigned long waveEnd;
+
 
 
 Servo rudder;
@@ -42,11 +46,13 @@ int numCoords = 0;
 GPSCoordinate coordinates[32];
 
 
-volatile bool manualControl;
+volatile bool manualControl = 0;
+//May need to be switched
 
 
 void setup() {
   Serial.begin(115200);
+  attachInterrupt(digitalPinToInterrupt(pin), handleInterrupt, CHANGE);
   ss.begin(GPSBaud);
   mainsheet.attach(11);
   Serial.println("Ready\n");
@@ -147,6 +153,23 @@ void processGPS() {
     currCoords.longitude = gps.location.lng();
     currentHeading = int(gps.course.deg()+.5);
     // velocity = gps.speed.knots();
+  }
+}
+
+void handleInterrupt(){
+  int value = digitalRead(pin);
+  if (value == 1) {
+    waveStart = micros();
+  }
+  else {
+    waveEnd = micros();
+    unsigned long time = waveEnd - waveStart;
+  }
+  if(time<1250){
+    manualControl = 0;
+  }
+  if(time>1650){
+    manualControl = 1;
   }
 }
 
