@@ -52,8 +52,6 @@ volatile bool manualControl = 0;
 
 void setup() {
   Serial.begin(115200);
-  attachInterrupt(digitalPinToInterrupt(pin), handleInterrupt, CHANGE);
-  ss.begin(GPSBaud);
   mainsheet.attach(11);
   Serial.println("Ready\n");
   while (true) {
@@ -76,6 +74,12 @@ void setup() {
     
     coordinates[numCoords++] = parseCoordinateString(inData);
   }
+  attachInterrupt(digitalPinToInterrupt(pin), handleInterrupt, CHANGE);
+// Use hardware serial once running without serial monitor on
+//  Serial.end();
+//  Serial.begin(GPSBaud);
+  ss.begin(GPSBaud);
+  mainsheet.attach(11);
 }
 
 
@@ -86,6 +90,13 @@ void loop() {
     rudderValue = pulseIn(rudderPin, HIGH);
     rudder.writeMicroseconds(rudderPosition);
   }
+  else {
+// Use hardware serial once running without serial monitor on
+//    while (Serial.available() > 0) {
+//      if (gps.encode(Serial.read())) {
+//        processGPS();
+//      }
+//    }
   else {
     while (ss.available() > 0)
       if (gps.encode(ss.read()))
