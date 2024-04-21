@@ -95,6 +95,10 @@ void loop() {
     rudder.writeMicroseconds(rudderPosition);
   }
   else {
+    finishedWaypoints:
+    if (destIndex > numCoords) {
+      rudder.writeMicroseconds(1750);
+    }
     // //Use hardware serial once running without serial monitor on
     // while (Serial.available() > 0) {
     //   if (gps.encode(Serial.read())) {
@@ -115,6 +119,9 @@ void loop() {
     if (TinyGPSPlus::distanceBetween(currCoords.latitude, currCoords.longitude, destCoords.latitude, destCoords.longitude) < 3) {
       prevIndex++;
       destIndex++;
+      if (destIndex > numCoords) {
+        goto finishedWaypoints;
+      }
       destCoords = coordinates[destIndex];
       prevCoords = coordinates[prevIndex];
     }
