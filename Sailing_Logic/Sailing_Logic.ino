@@ -8,14 +8,14 @@ struct GPSCoordinate {
 };
 
 static const int controlPin = 2;
-static const int TXPin = 4;
-static const int RXPin = 5;
+static const int gpsControlPin = 4;
 static const int rudderOutputPin = 9;
 static const int mainsheetOutputPin = 11;
 static const int rudderPin = 12;
 static const int mainsheetPin = 13;
 static const int windSensorPin = A5;
-static const uint32_t GPSBaud = 115200;
+static const uint32_t GPSBaud = 9600;
+unsigned long time = 1400;
 
 unsigned long waveStart;
 unsigned long waveEnd;
@@ -25,7 +25,6 @@ unsigned long waveEnd;
 Servo rudder;
 Servo mainsheet;
 TinyGPSPlus gps;
-SoftwareSerial ss(RXPin, TXPin);
 
 
 int prevIndex, destIndex;
@@ -50,7 +49,8 @@ int numCoords = 0;
 GPSCoordinate coordinates[32];
 
 
-volatile bool manualControl = 0;
+volatile bool manualControl = 1;
+bool temp;
 //May need to be switched
 
 
@@ -78,11 +78,18 @@ void setup() {
     coordinates[numCoords++] = parseCoordinateString(inData);
   }
   attachInterrupt(digitalPinToInterrupt(controlPin), handleInterrupt, CHANGE);
-// Use hardware serial once running without serial monitor on
-//  Serial.end();
-//  Serial.begin(GPSBaud);
-  ss.begin(GPSBaud);
-  rudder.attach(rudderOutputPin)
+  //audible ten second countdown before turning on gps and beginning loop
+  for (int i = 0; i<10; i++) {
+    blockingTone(7, 2000, 500);
+    blockingTone(7, 0, 500);
+  }
+  Serial.begin(GPSBaud);
+  pinMode(gpsControlPin, OUTPUT);
+  digitalWrite(gpsControlPin, HIGH); // turn gps on
+  pinMode(controlPin, INPUT);
+  pinMode(rudderPin, INPUT);
+  pinMode(mainsheetPin, INPUT);
+  rudder.attach(rudderOutputPin);
   mainsheet.attach(mainsheetOutputPin);
 }
 
@@ -90,23 +97,17 @@ void setup() {
 void loop() {
   if (manualControl) {
     mainsheetValue = pulseIn(mainsheetPin, HIGH);
-    mainsheet.writeMicroseconds(mainsheetTrim);
     rudderValue = pulseIn(rudderPin, HIGH);
-    rudder.writeMicroseconds(rudderPosition);
+    mainsheet.writeMicroseconds(mainsheetValue);
+    rudder.writeMicroseconds(rudderValue);
   }
   else {
     finishedWaypoints:
     if (destIndex >= numCoords) {
       rudder.writeMicroseconds(1750);
     }
-    // //Use hardware serial once running without serial monitor on
-    // while (Serial.available() > 0) {
-    //   if (gps.encode(Serial.read())) {
-    //     processGPS();
-    //   }
-    // }
-    while (ss.available() > 0)
-      if (gps.encode(ss.read()))
+    while (Serial.available() > 0)
+      if (gps.encode(Serial.read()))
         processGPS();
 
     if (prevIndex == NULL) {
@@ -127,7 +128,9 @@ void loop() {
     }
 
     windSensorValue = analogRead(windSensorPin);
+    Serial.println(windSensorValue);
     windDirection = map(windSensorValue, 0,1006, 0, 359);
+    Serial.println(windDirection);
     mainsheetTrim = calculateSailAngle(windDirection);
     mainsheet.writeMicroseconds(mainsheetTrim);
 
@@ -180,19 +183,19 @@ void processGPS() {
 }
 
 void handleInterrupt(){
-  int value = digitalRead(pin);
+  int value = digitalRead(controlPin);
   if (value == 1) {
     waveStart = micros();
   }
   else {
     waveEnd = micros();
-    unsigned long time = waveEnd - waveStart;
+    time = waveEnd - waveStart;
   }
   if(time<1250){
-    manualControl = 0;
-  }
-  if(time>1650){
     manualControl = 1;
+  }
+  if(time>1800){
+    manualControl = 0;
   }
 }
 
@@ -231,27 +234,26 @@ int calculateRudderPosition(int currentHeading, int targHeading) {
   
   int clockwiseDiff = (targHeading - currentHeading + 360) % 360;
   int counterclockwiseDiff = (currentHeading - targHeading + 360) % 360;
-
   if (clockwiseDiff < counterclockwiseDiff) {
       rudderScale = calcRudderScale(abs(targHeading-currentHeading));
   } else {
       rudderScale = calcRudderScale(abs(targHeading-currentHeading))*-1;
   }
 
-  return rudderScale*50+1450;
+  return rudderScale+1515;
 }
 
 
 int calcRudderScale(int headingDiff) {
 
-// change rudder scale in 5 degree increments, such that above ~40 degrees off course we get maximum steering,
+// change rudder scale in 8 degree increments, such that above ~40 degrees off course we get maximum steering,
 // then smoother steering as we approach the correct course.  Max rudder scale should be 6, min -6
 
-  if (headingDiff >= 42) {
-    return 6;
+  if (headingDiff >= 60) {
+    return 400;
   }
   else {
-    return headingDiff/7;
+    return map(headingDiff, 0, 59, 0, 400);
   }
 }
 
@@ -282,4 +284,21 @@ int calculateTargetHeading(float destHeading, int currentHeading, int windDirect
       }
     }
   }
+}
+
+
+void blockingTone(uint8_t pin, unsigned int frequency, unsigned long duration) {
+    pinMode(pin, OUTPUT);
+    unsigned long startTime = micros();
+
+    while (micros() - startTime < duration * 1000) {
+        unsigned long currentTime = micros() - startTime;
+        if (currentTime % (1000000 / frequency) < (1000000 / (2 * frequency))) {
+            digitalWrite(pin, HIGH);
+        } else {
+            digitalWrite(pin, LOW);
+        }
+    }
+
+    digitalWrite(pin, LOW);
 }
